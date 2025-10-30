@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teclado Colorido (HTML Puro)</title>
+    <style>
+        /* --- CSS EMBUTIDO --- */
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            background-color: #111; /* Fundo escuro */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden; /* Esconde barras de rolagem */
+            color: #ddd;
+        }
+        h1 {
+            color: #eee;
+            margin-top: 20px;
+        }
+        nav {
+            margin-bottom: 20px;
+        }
+        .instructions {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        #stage {
+            width: 90vw;
+            height: 80vh;
+            background-color: #222; 
+            position: relative;
+            border-radius: 10px;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .note-bubble {
+            position: absolute;
+            border-radius: 50%;
+            transition: transform 0.8s ease-out, opacity 0.8s ease-out;
+            pointer-events: none;
+            opacity: 1;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.7);
+        }
+        a {
+            border: none;
+            padding: 10px 20px;
+            text-align: center;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+            color: white;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎹 Teclado Colorido</h1>
+
+    <nav>
+        <a href="desenho.html" style="background-color: #007bff; margin-right: 15px;">Página de Desenho</a>
+        |
+        <a href="teclado_colorido.html" style="background-color: #4CAF50; margin-left: 15px;">Teclado Colorido</a>
+    </nav>
+
+    <p class="instructions">Use as teclas **A, S, D, F, G, H, J, K** (e W, E, T, Y, U) para tocar!</p>
+    
+    <div id="stage"></div>
+
+    <script>
+        // --- VARIÁVEIS E CONSTANTES ---
+        const stage = document.getElementById('stage');
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+        
+        const A4_FREQ = 440.0;
+        const C4_FREQ = A4_FREQ * (2**(-9/12));
+
+        // Mapeamento de Tecla para o Matiz (Hue)
+        const keyToHue = {
+            'a': 0, 'w': 30, 's': 60, 'e': 90, 'd': 120, 'f': 150, 
+            't': 180, 'g': 210, 'y': 240, 'h': 270, 'u': 300, 'j': 330, 'k': 360
+        };
+
+        const activeOscillators = {};
+
+        // --- FUNÇÕES DE ÁUDIO E VISUALIZAÇÃO ---
+
+        function hueToFrequency(hue) {
+            hue = hue % 360;
+            const semitonesFromC4 = (hue / 360.0) * 12; 
+            const frequency = C4_FREQ * (2**(semitonesFromC4 / 12));
+            return frequency;
+        }
+
+        function createNoteBubble(hue, key) {
+            const bubble = document.createElement('div');
+            bubble.classList.add('note-bubble');
+
+            const color = `hsl(${hue}, 100%, 80%)`;
+            const size = Math.random() * 50 + 50; 
+            
+            bubble.style.width = `${size}px`;
+            bubble.style.height = `${size}px`;
+            bubble.style.backgroundColor = color;
+            
+            const stageWidth = stage.clientWidth;
+            // Posição X baseada na nota para manter a ordem espectral
+            const initialX = (stageWidth / 2) + ((keyToHue[key] - 180) * (stageWidth / 360 / 2)); 
+            
+            bubble.style.left = `${initialX}px`;
+            bubble.style.bottom = `0px`; 
+            
+            stage.appendChild(bubble);
+
+            setTimeout(() => {
+                bubble.style.transform = `translateY(-${stage.clientHeight}px) scale(0.5)`; 
+                bubble.style.opacity = '0';
+            }, 50);
+
+            setTimeout(() => {
+                bubble.remove();
+            }, 900);
+        }
+
+        function playNote(key, hue) {
+            const frequency = hueToFrequency(hue);
+            
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+            oscillator.type = 'triangle'; // Usa onda triangular para um som mais suave que o quadrado
+
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + 0.01); 
+
+            oscillator.start(0);
+            
+            activeOscillators[key] = { oscillator, gainNode };
+            createNoteBubble(hue, key);
+        }
+
+        function stopNote(key) {
+            if (activeOscillators[key]) {
+                const { oscillator, gainNode } = activeOscillators[key];
+                const now = audioCtx.currentTime;
+                
+                // Release (decaimento do som)
+                gainNode.gain.cancelScheduledValues(now);
+                gainNode.gain.linearRampToValueAtTime(0, now + 0.2); 
+                
+                oscillator.stop(now + 0.2);
+                
+                delete activeOscillators[key];
+            }
+        }
+
+        // --- EVENT LISTENERS DE TECLADO ---
+
+        document.addEventListener('keydown', (event) => {
+            const key = event.key.toLowerCase();
+            
+            if (event.repeat || activeOscillators[key]) {
+                return;
+            }
+
+            if (keyToHue.hasOwnProperty(key)) {
+                event.preventDefault(); 
+                
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                
+                const hue = keyToHue[key];
+                playNote(key, hue);
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            const key = event.key.toLowerCase();
+            
+            if (keyToHue.hasOwnProperty(key)) {
+                stopNote(key);
+            }
+        });
+    </script>
+</body>
+</html>
