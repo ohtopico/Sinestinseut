@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sintetizador Espectro-Colorido (HTML Puro)</title>
+    <style>
+        /* --- CSS EMBUTIDO --- */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #444;
+            margin-bottom: 10px;
+        }
+        nav {
+            margin-bottom: 20px;
+        }
+        .controls-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 25px;
+            padding: 15px 30px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        #colorPicker {
+            width: 50px;
+            height: 30px;
+            padding: 0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button, a {
+            border: none;
+            padding: 10px 20px;
+            text-align: center;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+            color: white;
+            text-decoration: none;
+        }
+        #playButton {
+            background-color: #007bff;
+        }
+        #playButton:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+        #clearButton {
+            background-color: #dc3545;
+        }
+        #clearButton:hover {
+            background-color: #c82333;
+        }
+        #playButton:disabled {
+            background-color: #aaa;
+            cursor: wait;
+        }
+        #drawingCanvas {
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2); 
+            border: 2px solid #ccc; 
+            background-color: white; 
+            cursor: crosshair; 
+        }
+        #audioPlayer {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 800px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎨 Desenhe Seu Som!</h1>
+    
+    <nav>
+        <a href="desenho.html" style="background-color: #007bff; margin-right: 15px;">Página de Desenho</a>
+        |
+        <a href="teclado_colorido.html" style="background-color: #4CAF50; margin-left: 15px;">Teclado Colorido</a>
+    </nav>
+
+    <div class="controls-container">
+        <label for="colorPicker">Cor:</label>
+        <input type="color" id="colorPicker" value="#ff0000">
+        
+        <label for="brushSize">Tamanho do Pincel:</label>
+        <input type="range" id="brushSize" min="1" max="50" value="10">
+        <span id="brushSizeValue">10</span>px
+        
+        <button onclick="playDrawing()" id="playButton">▶️ Tocar Desenho</button>
+        <button onclick="clearCanvas()" id="clearButton">🗑️ Limpar Tela</button>
+    </div>
+
+    <canvas id="drawingCanvas" width="800" height="400"></canvas>
+
+    <script>
+        // --- VARIÁVEIS E CONSTANTES ---
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        const colorPicker = document.getElementById('colorPicker');
+        const brushSizeInput = document.getElementById('brushSize');
+        const brushSizeValueSpan = document.getElementById('brushSizeValue');
+        const playButton = document.getElementById('playButton');
+        
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+        
+        let isDrawing = false;
+        
+        // Constantes de Mapeamento
+        const C4_FREQ = 261.63; // Frequência de Dó Central
+        const DURATION_PER_SLICE = 0.05; // 50 ms por fatia de pixel (tempo)
+
+        // Inicialização
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        brushSizeInput.addEventListener('input', () => {
+            brushSizeValueSpan.textContent = brushSizeInput.value;
+        });
+
+        // --- FUNÇÕES DE DESENHO (Inalteradas) ---
+
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+            return { x, y };
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            const { x, y } = getMousePos(e);
+            ctx.beginPath(); 
+            ctx.moveTo(x, y); 
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+
+            const { x, y } = getMousePos(e);
+
+            ctx.lineWidth = brushSizeInput.value;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = colorPicker.value;
+
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+        canvas.addEventListener('mousemove', draw);
+
+        // --- FUNÇÕES DE MAPEAMENTO E ÁUDIO ---
+        
+        function rgbToHsv(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            const v = max;
+            const diff = max - min;
+            const s = max === 0 ? 0 : diff / max;
+            let h;
+            if (diff === 0) h = 0;
+            else if (max === r) h = (g - b) / diff + (g < b ? 6 : 0);
+            else if (max === g) h = (b - r) / diff + 2;
+            else h = (r - g) / diff + 4;
+            h /= 6;
+            return [h * 360, s, v]; // Retorna [Hue (0-360), S (0-1), V (0-1)]
+        }
+
+        function hueToFrequency(hue) {
+            hue = hue % 360;
+            const semitonesFromC4 = (hue / 360.0) * 12; 
+            const frequency = C4_FREQ * (2**(semitonesFromC4 / 12));
+            return Math.max(frequency, 20.0);
+        }
+
+        function getDrawingData() {
+            const width = canvas.width;
+            const height = canvas.height;
+            const imageData = ctx.getImageData(0, 0, width, height).data;
+            const drawingData = []; 
+
+            for (let x = 0; x < width; x++) {
+                let rSum = 0, gSum = 0, bSum = 0;
+                let pixelCount = 0;
+
+                for (let y = 0; y < height; y++) {
+                    const index = (y * width + x) * 4; 
+                    // Ignora branco (fundo)
+                    if (imageData[index] < 250 || imageData[index + 1] < 250 || imageData[index + 2] < 250) {
+                         rSum += imageData[index];
+                         gSum += imageData[index + 1];
+                         bSum += imageData[index + 2];
+                         pixelCount++;
+                    }
+                }
+                
+                if (pixelCount > 0) {
+                    const rAvg = Math.round(rSum / pixelCount);
+                    const gAvg = Math.round(gSum / pixelCount);
+                    const bAvg = Math.round(bSum / pixelCount);
+                    drawingData.push(rgbToHsv(rAvg, gAvg, bAvg));
+                } else {
+                    drawingData.push([0, 0, 0]); // Coluna vazia: Silêncio
+                }
+            }
+            return drawingData;
+        }
+
+        function playDrawing() {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            playButton.disabled = true;
+            playButton.textContent = '🎶 Tocando...';
+
+            const drawingData = getDrawingData();
+            let currentTime = audioCtx.currentTime;
+
+            drawingData.forEach(([h, s, v]) => {
+                if (v > 0.05) { // Toca se o brilho for significativo (não é silêncio total)
+                    const frequency = hueToFrequency(h);
+
+                    // Mapeamento de Timbre (Saturação)
+                    let waveType;
+                    if (s < 0.33) waveType = 'sine';
+                    else if (s < 0.67) waveType = 'triangle';
+                    else waveType = 'square';
+                    
+                    // Volume (Brilho)
+                    const volume = v * 0.4; 
+
+                    // 1. Cria e configura o oscilador
+                    const oscillator = audioCtx.createOscillator();
+                    const gainNode = audioCtx.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    
+                    oscillator.type = waveType;
+                    oscillator.frequency.setValueAtTime(frequency, currentTime);
+                    
+                    // 2. Controla o volume (Attack/Sustain/Release simples)
+                    gainNode.gain.setValueAtTime(0, currentTime);
+                    gainNode.gain.linearRampToValueAtTime(volume, currentTime + 0.005); // Attack
+                    gainNode.gain.linearRampToValueAtTime(volume, currentTime + DURATION_PER_SLICE * 0.9); // Sustain
+                    gainNode.gain.linearRampToValueAtTime(0, currentTime + DURATION_PER_SLICE); // Release
+
+                    // 3. Agenda o início e o fim da nota
+                    oscillator.start(currentTime);
+                    oscillator.stop(currentTime + DURATION_PER_SLICE);
+                }
+                // Avança o tempo do áudio para a próxima fatia
+                currentTime += DURATION_PER_SLICE;
+            });
+            
+            // Reabilita o botão após a duração total do som
+            const totalDuration = drawingData.length * DURATION_PER_SLICE;
+            setTimeout(() => {
+                playButton.disabled = false;
+                playButton.textContent = '▶️ Tocar Desenho';
+            }, totalDuration * 1000 + 100); 
+        }
+    </script>
+</body>
+</html>
