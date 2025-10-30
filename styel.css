@@ -1,0 +1,33 @@
+/* ... código anterior ... */
+
+#playButton, #clearButton { /* Aplica o estilo aos dois botões */
+    border: none;
+    padding: 10px 20px;
+    text-align: center;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+    color: white;
+}
+
+#playButton {
+    background-color: #007bff; /* Azul para Tocar */
+}
+
+#playButton:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+#clearButton {
+    background-color: #dc3545; /* Vermelho para Limpar */
+}
+
+#clearButton:hover {
+    background-color: #c82333;
+}
+
+#playButton:disabled {
+    background-color: #aaa;
+    cursor: wait;
+}
