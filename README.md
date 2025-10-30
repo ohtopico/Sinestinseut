@@ -2,5 +2,5 @@
 Converte imagem em som.
 
 
-cd caminho/da/pasta
-python app.py
+- cd caminho/da/pasta
+- python app.py
